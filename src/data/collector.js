@@ -15,7 +15,8 @@
 // TradingView API - conditionally imported
 // In production: requires @mathieuc/tradingview to be installed
 // In testing: Uses mock via setupFilesAfterEnv
-import { TradingView, BuiltInIndicator, BuiltInStudy } from '@mathieuc/tradingview';
+import pkg from '@mathieuc/tradingview';
+const { Client: TradingView, BuiltInIndicator } = pkg;
 
 export class DataCollector {
   constructor(config, logger) {
@@ -109,28 +110,33 @@ export class DataCollector {
 
       this.logger.info(`Subscribing to real-time data: ${key}`);
 
-      // Create chart for symbol/timeframe
-      const chart = await this.client.getChart({
-        symbol,
-        timeframe,
+      // Create chart for symbol/timeframe using correct TradingView-API v3.5.2 interface
+      const chart = new this.client.Session.Chart();
+
+      // Convert timeframe format (5m -> 5, 1h -> 60, 1D -> D)
+      const tvTimeframe = this._convertTimeframe(timeframe);
+
+      // Set market with proper exchange prefix
+      chart.setMarket(`BINANCE:${symbol}`, {
+        timeframe: tvTimeframe,
       });
-
-      // Initialize indicators (EMA, ATR)
-      await this._attachIndicators(key, chart);
-
-      // Store callback
-      if (onUpdate) {
-        this.callbacks.set(key, onUpdate);
-      }
 
       // Initialize data array
       if (!this.data.has(key)) {
         this.data.set(key, []);
       }
 
-      // Set up chart ready handler
-      chart.onReady(() => {
+      // Store callback
+      if (onUpdate) {
+        this.callbacks.set(key, onUpdate);
+      }
+
+      // Set up symbol loaded handler (chart is ready)
+      chart.onSymbolLoaded(() => {
         this.logger.debug(`Chart ready: ${key}, periods: ${chart.periods.length}`);
+
+        // Attach indicators after symbol is loaded
+        this._attachIndicators(key, chart);
 
         // Load initial data
         this._processChartData(key, chart);
@@ -139,7 +145,7 @@ export class DataCollector {
         this.reconnectAttempts.delete(key);
       });
 
-      // Set up chart update handler
+      // Set up chart update handler for new candles
       chart.onUpdate(() => {
         this._processChartData(key, chart);
 
@@ -162,6 +168,7 @@ export class DataCollector {
 
     } catch (error) {
       this.logger.error(`Failed to subscribe to ${key}:`, error.message);
+      this.logger.debug(`Full error:`, error);
       this._handleDisconnection(symbol, timeframe, onUpdate);
     }
   }
@@ -189,14 +196,16 @@ export class DataCollector {
         `Collecting historical data for ${key}: ${startDate.toISOString()} to ${endDate.toISOString()}`
       );
 
-      // Create chart for symbol/timeframe
-      const chart = await this.client.getChart({
-        symbol,
-        timeframe,
-      });
+      // Create chart for symbol/timeframe using correct TradingView-API v3.5.2 interface
+      const chart = new this.client.Session.Chart();
 
-      // Attach indicators
-      await this._attachIndicators(key, chart);
+      // Convert timeframe format
+      const tvTimeframe = this._convertTimeframe(timeframe);
+
+      // Set market with proper exchange prefix
+      chart.setMarket(`BINANCE:${symbol}`, {
+        timeframe: tvTimeframe,
+      });
 
       // Initialize data array
       const historicalData = [];
@@ -212,8 +221,9 @@ export class DataCollector {
           resolve();
         }, 5000);
 
-        chart.onReady(() => {
+        chart.onSymbolLoaded(() => {
           clearTimeout(timeout);
+          this._attachIndicators(key, chart);
           resolve();
         });
       });
@@ -420,6 +430,9 @@ export class DataCollector {
       const existingData = this.data.get(key) || [];
       const existingTimes = new Set(existingData.map(c => c.time));
 
+      // Build complete historical data including all periods from chart
+      let completeHistory = [...existingData];
+
       // Process each period
       for (let i = 0; i < periods.length; i++) {
         const period = periods[i];
@@ -432,33 +445,31 @@ export class DataCollector {
         const candle = {
           time: period.time,
           open: period.open,
-          high: period.high,
-          low: period.low,
+          high: period.max,  // TradingView uses 'max' instead of 'high'
+          low: period.min,   // TradingView uses 'min' instead of 'low'
           close: period.close,
           volume: period.volume,
           indicators: {},
         };
 
+        // Build incremental history for accurate indicator calculations
+        completeHistory.push(candle);
+
+        // Calculate indicators with full historical context
         // Extract EMA values
         const emaLengths = this.config.indicators.emaLengths;
         for (const length of emaLengths) {
-          const studyKey = `${key}_ema_${length}`;
-          const study = this.studies.get(studyKey);
-          if (study && study.periods && study.periods[i]) {
-            candle.indicators[`ema_${length}`] = study.periods[i].value;
+          const emaValue = this._calculateEMA(completeHistory, length);
+          if (emaValue !== null) {
+            candle.indicators[`ema_${length}`] = emaValue;
           }
         }
 
-        // Extract ATR value
-        const atrStudy = this.studies.get(`${key}_atr`);
-        if (atrStudy && atrStudy.periods && atrStudy.periods[i]) {
-          candle.indicators.atr = atrStudy.periods[i].value;
-        }
-
-        // Extract Volume
-        const volumeStudy = this.studies.get(`${key}_volume`);
-        if (volumeStudy && volumeStudy.periods && volumeStudy.periods[i]) {
-          candle.indicators.volume = volumeStudy.periods[i].value;
+        // Calculate ATR value
+        const atrLength = this.config.indicators.atrLength;
+        const atrValue = this._calculateATR(completeHistory, atrLength);
+        if (atrValue !== null) {
+          candle.indicators.atr = atrValue;
         }
 
         processedCandles.push(candle);
@@ -510,5 +521,102 @@ export class DataCollector {
         });
       }
     }, delay);
+  }
+
+  /**
+   * Calculate Exponential Moving Average (EMA)
+   * Formula: EMA = (Close - EMA_prev) * multiplier + EMA_prev
+   * Multiplier = 2 / (length + 1)
+   *
+   * @private
+   * @param {Array} candles - Array of candle objects with 'close' property
+   * @param {number} length - EMA period (e.g., 8, 21, 50)
+   * @returns {number|null} Current EMA value or null if insufficient data
+   */
+  _calculateEMA(candles, length) {
+    if (candles.length < length) {
+      return null; // Not enough data for initial SMA calculation
+    }
+
+    const multiplier = 2 / (length + 1);
+    let ema = null;
+
+    // Calculate SMA for first value
+    let sum = 0;
+    for (let i = 0; i < length; i++) {
+      sum += candles[i].close;
+    }
+    ema = sum / length;
+
+    // Calculate EMA for remaining candles
+    for (let i = length; i < candles.length; i++) {
+      ema = (candles[i].close - ema) * multiplier + ema;
+    }
+
+    return ema;
+  }
+
+  /**
+   * Calculate Average True Range (ATR)
+   * ATR = SMA of True Range over specified period
+   * True Range = max(high - low, abs(high - close_prev), abs(low - close_prev))
+   *
+   * @private
+   * @param {Array} candles - Array of candle objects with 'high', 'low', 'close' properties
+   * @param {number} length - ATR period (typically 14)
+   * @returns {number|null} Current ATR value or null if insufficient data
+   */
+  _calculateATR(candles, length) {
+    if (candles.length < length + 1) {
+      return null; // Need at least length+1 candles (one for previous close)
+    }
+
+    const trueRanges = [];
+
+    for (let i = 1; i < candles.length; i++) {
+      const current = candles[i];
+      const previous = candles[i - 1];
+
+      const tr1 = current.high - current.low;
+      const tr2 = Math.abs(current.high - previous.close);
+      const tr3 = Math.abs(current.low - previous.close);
+
+      const trueRange = Math.max(tr1, tr2, tr3);
+      trueRanges.push(trueRange);
+    }
+
+    // Calculate SMA of True Range
+    if (trueRanges.length < length) {
+      return null;
+    }
+
+    let sum = 0;
+    for (let i = 0; i < length; i++) {
+      sum += trueRanges[i];
+    }
+    return sum / length;
+  }
+
+  /**
+   * Convert timeframe format from common notation to TradingView format
+   * 5m → 5, 15m → 15, 1h → 60, 4h → 240, 1D → D, 1W → W, 1M → M
+   *
+   * @private
+   * @param {string} timeframe - Timeframe in standard format (e.g., '5m', '1h')
+   * @returns {string} TradingView format (e.g., '5', '60', 'D')
+   */
+  _convertTimeframe(timeframe) {
+    const map = {
+      '1m': '1',
+      '5m': '5',
+      '15m': '15',
+      '30m': '30',
+      '1h': '60',
+      '4h': '240',
+      '1D': 'D',
+      '1W': 'W',
+      '1M': 'M',
+    };
+    return map[timeframe] || timeframe;
   }
 }
