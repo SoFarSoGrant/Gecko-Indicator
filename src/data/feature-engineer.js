@@ -18,6 +18,68 @@ class FeatureEngineer {
   constructor(config, logger) {
     this.config = config;
     this.logger = logger;
+    // FIX #1: Dynamic bounds computed from training data instead of hardcoded
+    this.normalizationBounds = null;
+    this.featureStats = null; // For ZScore normalization
+  }
+
+  /**
+   * Set normalization bounds from training dataset
+   * CRITICAL FIX #1: Replaces hardcoded bounds
+   *
+   * @param {Array} features - Array of feature objects from training set
+   */
+  setNormalizationBounds(features) {
+    if (!Array.isArray(features) || features.length === 0) {
+      this.logger.warn('Empty features array for bounds computation, using defaults');
+      return;
+    }
+
+    const bounds = {};
+    const allKeys = Object.keys(features[0]);
+
+    for (const key of allKeys) {
+      const values = features.map(f => f[key]).filter(v => typeof v === 'number');
+      if (values.length === 0) continue;
+
+      bounds[key] = [
+        Math.min(...values),
+        Math.max(...values)
+      ];
+    }
+
+    this.normalizationBounds = bounds;
+    this.logger.debug(`Normalization bounds computed for ${Object.keys(bounds).length} features`);
+  }
+
+  /**
+   * Compute per-feature statistics for ZScore normalization
+   * CRITICAL FIX #3: Replaces incorrect global mean/stdDev calculation
+   *
+   * @param {Array} features - Array of feature objects from training set
+   */
+  setFeatureStatistics(features) {
+    if (!Array.isArray(features) || features.length === 0) {
+      this.logger.warn('Empty features array for statistics computation');
+      return;
+    }
+
+    const stats = {};
+    const allKeys = Object.keys(features[0]);
+
+    for (const key of allKeys) {
+      const values = features.map(f => f[key]).filter(v => typeof v === 'number');
+      if (values.length === 0) continue;
+
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+      const stdDev = Math.sqrt(variance);
+
+      stats[key] = { mean, stdDev };
+    }
+
+    this.featureStats = stats;
+    this.logger.debug(`Feature statistics computed for ${Object.keys(stats).length} features`);
   }
 
   /**
@@ -118,6 +180,8 @@ class FeatureEngineer {
 
   /**
    * Extract price action features from current candle (12 features)
+   * CRITICAL FIX #2: Uses percentage-based metrics instead of absolute prices
+   * This prevents model from overfitting to symbol-specific price levels
    * @private
    */
   _extractPriceFeatures(candle) {
@@ -128,61 +192,107 @@ class FeatureEngineer {
     const upperWick = high - Math.max(open, close);
     const lowerWick = Math.min(open, close) - low;
 
+    // Safe division with fallback
+    const closePrice = close > 0 ? close : 1;
+    const hl2Price = (high + low) / 2;
+    const rangeValue = range > 0 ? range : 1;
+
     return {
-      // Raw OHLCV
-      close,
-      open,
-      high,
-      low,
+      // REMOVED: Raw OHLCV prices (symbol-specific, causes overfitting)
+      // close, open, high, low - NO LONGER INCLUDED
       volume,
 
-      // Range metrics
+      // Range metrics (scale-invariant)
       range,
       body,
       upper_wick: upperWick,
       lower_wick: lowerWick,
 
-      // Composite metrics
-      hl2: (high + low) / 2,
-      hlc3: (high + low + close) / 3,
+      // Percentage-based composite metrics (generalize across symbols)
+      range_percent: range > 0 ? (range / closePrice) * 100 : 0,
       body_percent: range > 0 ? (body / range) * 100 : 0,
+      upper_wick_percent: range > 0 ? (upperWick / range) * 100 : 0,
+      lower_wick_percent: range > 0 ? (lowerWick / range) * 100 : 0,
+      close_position_in_range: range > 0
+        ? ((close - low) / range) * 100
+        : 50, // Midpoint if no range
+
+      // Volume metrics
+      log_volume: volume > 0 ? Math.log10(volume) : 0,
     };
   }
 
   /**
    * Extract EMA features from all timeframes (15 features)
+   * CRITICAL FIX #2: Uses percentage distances instead of absolute EMA values
    * Includes EMA(8, 21, 50, 200) for LF/MF and EMA(5, 8, 21, 50, 200) for HF
    * @private
    */
   _extractEMAFeatures(lfCandle, mfCandle, hfCandle) {
+    // Calculate EMA distances as percentage of price
+    const lfClose = lfCandle.close > 0 ? lfCandle.close : 1;
+    const mfClose = mfCandle.close > 0 ? mfCandle.close : 1;
+    const hfClose = hfCandle.close > 0 ? hfCandle.close : 1;
+
+    const lfIndicators = lfCandle.indicators || {};
+    const mfIndicators = mfCandle.indicators || {};
+    const hfIndicators = hfCandle.indicators || {};
+
     return {
-      // Low Frame EMAs
-      ema8_lf: lfCandle.indicators?.ema_8 || 0,
-      ema21_lf: lfCandle.indicators?.ema_21 || 0,
-      ema50_lf: lfCandle.indicators?.ema_50 || 0,
-      ema200_lf: lfCandle.indicators?.ema_200 || 0,
+      // Low Frame EMA distances (% from close)
+      ema8_lf_distance: lfIndicators.ema_8
+        ? ((lfCandle.close - lfIndicators.ema_8) / lfClose) * 100
+        : 0,
+      ema21_lf_distance: lfIndicators.ema_21
+        ? ((lfCandle.close - lfIndicators.ema_21) / lfClose) * 100
+        : 0,
+      ema50_lf_distance: lfIndicators.ema_50
+        ? ((lfCandle.close - lfIndicators.ema_50) / lfClose) * 100
+        : 0,
+      ema200_lf_distance: lfIndicators.ema_200
+        ? ((lfCandle.close - lfIndicators.ema_200) / lfClose) * 100
+        : 0,
 
-      // Mid Frame EMAs
-      ema8_mf: mfCandle.indicators?.ema_8 || 0,
-      ema21_mf: mfCandle.indicators?.ema_21 || 0,
-      ema50_mf: mfCandle.indicators?.ema_50 || 0,
-      ema200_mf: mfCandle.indicators?.ema_200 || 0,
+      // Mid Frame EMA distances (% from close)
+      ema8_mf_distance: mfIndicators.ema_8
+        ? ((mfCandle.close - mfIndicators.ema_8) / mfClose) * 100
+        : 0,
+      ema21_mf_distance: mfIndicators.ema_21
+        ? ((mfCandle.close - mfIndicators.ema_21) / mfClose) * 100
+        : 0,
+      ema50_mf_distance: mfIndicators.ema_50
+        ? ((mfCandle.close - mfIndicators.ema_50) / mfClose) * 100
+        : 0,
+      ema200_mf_distance: mfIndicators.ema_200
+        ? ((mfCandle.close - mfIndicators.ema_200) / mfClose) * 100
+        : 0,
 
-      // High Frame EMAs (includes 5 EMA for HF)
-      ema5_hf: hfCandle.indicators?.ema_5 || 0,
-      ema8_hf: hfCandle.indicators?.ema_8 || 0,
-      ema21_hf: hfCandle.indicators?.ema_21 || 0,
-      ema50_hf: hfCandle.indicators?.ema_50 || 0,
-      ema200_hf: hfCandle.indicators?.ema_200 || 0,
+      // High Frame EMA distances (% from close)
+      ema5_hf_distance: hfIndicators.ema_5
+        ? ((hfCandle.close - hfIndicators.ema_5) / hfClose) * 100
+        : 0,
+      ema8_hf_distance: hfIndicators.ema_8
+        ? ((hfCandle.close - hfIndicators.ema_8) / hfClose) * 100
+        : 0,
+      ema21_hf_distance: hfIndicators.ema_21
+        ? ((hfCandle.close - hfIndicators.ema_21) / hfClose) * 100
+        : 0,
+      ema50_hf_distance: hfIndicators.ema_50
+        ? ((hfCandle.close - hfIndicators.ema_50) / hfClose) * 100
+        : 0,
+      ema200_hf_distance: hfIndicators.ema_200
+        ? ((hfCandle.close - hfIndicators.ema_200) / hfClose) * 100
+        : 0,
 
-      // ATR features (volatility)
-      atr_lf: lfCandle.indicators?.atr || 0,
-      atr_hf: hfCandle.indicators?.atr || 0,
+      // ATR features (volatility, already scale-free)
+      atr_lf: lfIndicators.atr || 0,
+      atr_hf: hfIndicators.atr || 0,
     };
   }
 
   /**
    * Extract consolidation pattern features (12 features)
+   * CRITICAL FIX #2: Uses percentage-based metrics instead of absolute prices
    * Analyzes consolidation base, compression, test bar characteristics
    * @private
    */
@@ -194,6 +304,9 @@ class FeatureEngineer {
     let touches = 0;
     let compressionRatio = 1;
     let volatilitySqueeze = 0;
+
+    const basePrice = consolidation.basePrice || lfCandle.close;
+    const safeBasePrice = basePrice > 0 ? basePrice : 1;
 
     if (consolidation.basePrice && lfHistory.length >= 10) {
       // Count bars within consolidation tolerance
@@ -212,17 +325,20 @@ class FeatureEngineer {
         .reduce((a, b) => a + b, 0) / lfHistory.length;
       compressionRatio = avgRange > 0 ? recentRange / avgRange : 1;
 
-      // Calculate volatility squeeze (standard deviation)
-      volatilitySqueeze = this._standardDeviation(
-        lfHistory.slice(0, 10).map(c => c.close)
-      );
+      // Calculate volatility squeeze (standard deviation as % of close)
+      const closes = lfHistory.slice(0, 10).map(c => c.close);
+      const stdDev = this._standardDeviation(closes);
+      volatilitySqueeze = (stdDev / safeBasePrice) * 100;
     }
 
     return {
-      // Consolidation base metrics
-      consolidation_level: consolidation.basePrice || 0,
-      consolidation_range: consolidation.range || 0,
-      price_distance_from_base: Math.abs(lfCandle.close - (consolidation.basePrice || 0)),
+      // Consolidation base metrics (percentage-based)
+      consolidation_range_percent: consolidation.range > 0
+        ? (consolidation.range / safeBasePrice) * 100
+        : 0,
+      price_distance_from_base_percent: consolidation.basePrice
+        ? ((Math.abs(lfCandle.close - consolidation.basePrice) / safeBasePrice) * 100)
+        : 0,
 
       // Touch detection
       touches_to_level: touches,
@@ -231,8 +347,8 @@ class FeatureEngineer {
       // Compression metrics
       range_ratio: compressionRatio,
       volatility_squeeze: volatilitySqueeze,
-      avg_range_last_10: lfHistory.length >= 10
-        ? lfHistory.slice(0, 10).reduce((sum, c) => sum + (c.high - c.low), 0) / 10
+      avg_range_last_10_percent: lfHistory.length >= 10
+        ? (lfHistory.slice(0, 10).reduce((sum, c) => sum + (c.high - c.low), 0) / 10 / safeBasePrice) * 100
         : 0,
 
       // Test bar analysis
@@ -356,6 +472,8 @@ class FeatureEngineer {
 
   /**
    * Normalize feature values using minmax or zscore
+   * CRITICAL FIX #1: Uses dynamic bounds from training dataset
+   * CRITICAL FIX #3: Uses per-feature statistics for ZScore
    *
    * @param {Object} features - Raw features object
    * @param {string} method - Normalization method ('minmax' or 'zscore')
@@ -364,49 +482,91 @@ class FeatureEngineer {
   normalizeFeatures(features, method = 'minmax') {
     const normalized = {};
 
-    // Define reasonable bounds for each feature type
-    // These are used for minmax normalization
-    const bounds = {
-      // Price features - normalize by typical price ranges
-      close: [0, 50000],  // Placeholder, should be set per symbol
-      open: [0, 50000],
-      high: [0, 50000],
-      low: [0, 50000],
+    if (method === 'minmax') {
+      // Use dynamic bounds if set, otherwise fallback to defaults
+      const bounds = this.normalizationBounds || this._getDefaultBounds();
+
+      for (const [key, value] of Object.entries(features)) {
+        const [min, max] = bounds[key] || [0, 1];
+        const range = max - min;
+
+        if (range === 0) {
+          normalized[key] = 0.5; // Center if no range
+        } else {
+          // Clip value to bounds and normalize to [0, 1]
+          normalized[key] = Math.max(0, Math.min(1, (value - min) / range));
+        }
+      }
+    } else if (method === 'zscore') {
+      // CRITICAL FIX #3: Use per-feature statistics instead of global mean/stdDev
+      // This requires featureStats to be set via setFeatureStatistics()
+      if (!this.featureStats) {
+        this.logger.warn('Feature statistics not set. Using per-feature normalization from data.');
+        // Fallback: return as-is (will be normalized during training)
+        return features;
+      }
+
+      for (const [key, value] of Object.entries(features)) {
+        const stats = this.featureStats[key];
+        if (stats && stats.stdDev > 0) {
+          normalized[key] = (value - stats.mean) / stats.stdDev;
+        } else {
+          // If no stats or zero variance, keep value as-is
+          normalized[key] = value;
+        }
+      }
+    } else {
+      return features; // Return as-is if method not recognized
+    }
+
+    return normalized;
+  }
+
+  /**
+   * Get default normalization bounds for all features
+   * Used as fallback if dynamic bounds not set
+   * @private
+   */
+  _getDefaultBounds() {
+    return {
+      // Price features (percentage-based, generalize across symbols)
       volume: [0, 100000000],
       range: [0, 1000],
       body: [0, 1000],
       upper_wick: [0, 1000],
       lower_wick: [0, 1000],
-      hl2: [0, 50000],
-      hlc3: [0, 50000],
+      range_percent: [0, 10],
       body_percent: [0, 100],
+      upper_wick_percent: [0, 100],
+      lower_wick_percent: [0, 100],
+      close_position_in_range: [0, 100],
+      log_volume: [0, 10],
 
-      // EMA features - typically same scale as price
-      ema8_lf: [0, 50000],
-      ema21_lf: [0, 50000],
-      ema50_lf: [0, 50000],
-      ema200_lf: [0, 50000],
-      ema8_mf: [0, 50000],
-      ema21_mf: [0, 50000],
-      ema50_mf: [0, 50000],
-      ema200_mf: [0, 50000],
-      ema5_hf: [0, 50000],
-      ema8_hf: [0, 50000],
-      ema21_hf: [0, 50000],
-      ema50_hf: [0, 50000],
-      ema200_hf: [0, 50000],
+      // EMA features (percentage distances)
+      ema8_lf_distance: [-5, 5],
+      ema21_lf_distance: [-5, 5],
+      ema50_lf_distance: [-5, 5],
+      ema200_lf_distance: [-5, 5],
+      ema8_mf_distance: [-5, 5],
+      ema21_mf_distance: [-5, 5],
+      ema50_mf_distance: [-5, 5],
+      ema200_mf_distance: [-5, 5],
+      ema5_hf_distance: [-5, 5],
+      ema8_hf_distance: [-5, 5],
+      ema21_hf_distance: [-5, 5],
+      ema50_hf_distance: [-5, 5],
+      ema200_hf_distance: [-5, 5],
       atr_lf: [0, 1000],
       atr_hf: [0, 1000],
 
-      // Consolidation features
-      consolidation_level: [0, 50000],
-      consolidation_range: [0, 1000],
-      price_distance_from_base: [0, 1000],
+      // Consolidation features (percentage-based)
+      consolidation_range_percent: [0, 10],
+      price_distance_from_base_percent: [0, 10],
       touches_to_level: [0, 50],
       touch_density: [0, 1],
       range_ratio: [0, 2],
-      volatility_squeeze: [0, 1000],
-      avg_range_last_10: [0, 1000],
+      volatility_squeeze: [0, 10],
+      avg_range_last_10_percent: [0, 10],
       has_test_bar: [0, 1],
       test_bar_strength: [0, 1],
       test_bar_volume_ratio: [0, 5],
@@ -438,34 +598,8 @@ class FeatureEngineer {
       volume_ratio: [0, 5],
       return_last_5_bars: [-0.1, 0.1],
       return_last_10_bars: [-0.1, 0.1],
+      bars_lower_lows: [0, 1], // Added missing feature
     };
-
-    if (method === 'minmax') {
-      for (const [key, value] of Object.entries(features)) {
-        const [min, max] = bounds[key] || [0, 1];
-        const range = max - min;
-
-        if (range === 0) {
-          normalized[key] = 0.5; // Center if no range
-        } else {
-          normalized[key] = Math.max(0, Math.min(1, (value - min) / range));
-        }
-      }
-    } else if (method === 'zscore') {
-      // Calculate mean and std dev from features
-      const values = Object.values(features);
-      const mean = values.reduce((a, b) => a + b, 0) / values.length;
-      const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
-      const stdDev = Math.sqrt(variance);
-
-      for (const [key, value] of Object.entries(features)) {
-        normalized[key] = stdDev > 0 ? (value - mean) / stdDev : 0;
-      }
-    } else {
-      return features; // Return as-is if method not recognized
-    }
-
-    return normalized;
   }
 
   /**

@@ -8,7 +8,7 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "collect:data": "node scripts/collect-data.js",
-    "train:model": "node scripts/train-model.js",
+    "train:model": "node scripts/train-model.cjs",
     "backtest": "node scripts/backtest.js",
     "test": "jest --coverage",
     "test:watch": "jest --watch",

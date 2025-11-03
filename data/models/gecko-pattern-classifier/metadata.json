@@ -1,0 +1,37 @@
+{
+  "trainedAt": "2025-11-03T20:46:49.477Z",
+  "hyperparameters": {
+    "inputFeatures": 62,
+    "hiddenLayers": [
+      128,
+      64,
+      32
+    ],
+    "dropout": [
+      0.3,
+      0.2,
+      0.2
+    ],
+    "l2Regularization": 0.001,
+    "learningRate": 0.001,
+    "batchSize": 32,
+    "epochs": 100,
+    "earlyStoppingPatience": 15
+  },
+  "trainingMetrics": {
+    "epochs": 20,
+    "trainLoss": 0.06600816547870636,
+    "trainAccuracy": 1,
+    "valLoss": 0.00007566776912426576,
+    "valAccuracy": 1,
+    "testLoss": 0.00011192340025445446,
+    "testAccuracy": 1,
+    "testAUC": 1
+  },
+  "datasetInfo": {
+    "totalSamples": 200,
+    "trainSize": 140,
+    "valSize": 30,
+    "testSize": 30
+  }
+}

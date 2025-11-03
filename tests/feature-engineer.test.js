@@ -2,12 +2,12 @@
  * Feature Engineer Tests
  *
  * Comprehensive test suite for feature extraction, normalization, and validation.
- * Tests all 62 features across 5 categories:
- * 1. Price action features
- * 2. EMA features
- * 3. Consolidation pattern features
- * 4. Trend alignment features
- * 5. Support/resistance & momentum features
+ * Tests 60 features across 5 categories (updated post-Phase 4 fixes):
+ * 1. Price action features (10: removed absolute prices, added percentage metrics)
+ * 2. EMA features (15: converted to percentage distances from close)
+ * 3. Consolidation pattern features (12: percentage-based)
+ * 4. Trend alignment features (12: unchanged)
+ * 5. Support/resistance & momentum features (11: unchanged)
  *
  * @test
  */
@@ -164,15 +164,20 @@ describe('FeatureEngineer', () => {
       expect(result).toHaveProperty('timestamp');
     });
 
-    test('should extract exactly 62 features', async () => {
+    test('should extract exactly 60 features (post-Phase4 fixes)', async () => {
       const multiTimeframeData = createMockMultiTimeframeData();
       const pattern = createMockPattern();
 
       const result = await featureEngineer.engineerFeatures('BTCUSDT', pattern, multiTimeframeData);
 
-      expect(result.count).toBe(62);
-      expect(Object.keys(result.raw).length).toBe(62);
-      expect(Object.keys(result.normalized).length).toBe(62);
+      // 60 features after Phase 4 critical fixes:
+      // - Removed 5 absolute price features (close, open, high, low, hl2)
+      // - Added 5 percentage-based replacements (range_percent, close_position_in_range, log_volume, etc.)
+      // - Removed hlc3 (redundant with other composites)
+      // Net: 62 - 2 = 60 features
+      expect(result.count).toBe(60);
+      expect(Object.keys(result.raw).length).toBe(60);
+      expect(Object.keys(result.normalized).length).toBe(60);
     });
 
     test('should throw error if missing candle data', async () => {
@@ -202,7 +207,7 @@ describe('FeatureEngineer', () => {
       const result = await featureEngineer.engineerFeatures('BTCUSDT', {}, multiTimeframeData);
 
       expect(result).toHaveProperty('raw');
-      expect(result.count).toBe(62);
+      expect(result.count).toBe(60);
     });
   });
 
@@ -210,25 +215,26 @@ describe('FeatureEngineer', () => {
   // PRICE FEATURES TESTS
   // ============================================================================
 
-  describe('Price Action Features (12 features)', () => {
-    test('should extract all price features correctly', async () => {
+  describe('Price Action Features (10 features)', () => {
+    test('should extract all price features correctly (post-Phase4 fixes)', async () => {
       const multiTimeframeData = createMockMultiTimeframeData();
       const result = await featureEngineer.engineerFeatures('BTCUSDT', createMockPattern(), multiTimeframeData);
 
       const { priceFeatures } = result.categories;
 
-      expect(priceFeatures).toHaveProperty('open');
-      expect(priceFeatures).toHaveProperty('high');
-      expect(priceFeatures).toHaveProperty('low');
-      expect(priceFeatures).toHaveProperty('close');
+      // Phase 4 Fix #2: Removed absolute price features (close, open, high, low, hl2, hlc3)
+      // to prevent symbol-specific overfitting. Now using percentage-based metrics.
       expect(priceFeatures).toHaveProperty('volume');
       expect(priceFeatures).toHaveProperty('range');
       expect(priceFeatures).toHaveProperty('body');
       expect(priceFeatures).toHaveProperty('upper_wick');
       expect(priceFeatures).toHaveProperty('lower_wick');
-      expect(priceFeatures).toHaveProperty('hl2');
-      expect(priceFeatures).toHaveProperty('hlc3');
+      expect(priceFeatures).toHaveProperty('range_percent');
       expect(priceFeatures).toHaveProperty('body_percent');
+      expect(priceFeatures).toHaveProperty('upper_wick_percent');
+      expect(priceFeatures).toHaveProperty('lower_wick_percent');
+      expect(priceFeatures).toHaveProperty('close_position_in_range');
+      expect(priceFeatures).toHaveProperty('log_volume');
     });
 
     test('should calculate range correctly (high - low)', async () => {
@@ -264,7 +270,7 @@ describe('FeatureEngineer', () => {
       expect(features.lower_wick).toBe(1000); // 40000 - 39000
     });
 
-    test('should calculate HLC3 average correctly', async () => {
+    test('should calculate close position in range correctly', async () => {
       const candle = createMockCandle({
         high: 42000,
         low: 38000,
@@ -272,7 +278,10 @@ describe('FeatureEngineer', () => {
       });
       const features = featureEngineer._extractPriceFeatures(candle);
 
-      expect(features.hlc3).toBe(40000); // (42000 + 38000 + 40000) / 3
+      // Phase 4 Fix #2: Removed hlc3 (redundant composite), added close_position_in_range
+      // close_position_in_range = (close - low) / range * 100
+      // = (40000 - 38000) / (42000 - 38000) * 100 = 2000 / 4000 * 100 = 50%
+      expect(features.close_position_in_range).toBe(50);
     });
 
     test('should handle zero range without division error', async () => {
@@ -294,61 +303,63 @@ describe('FeatureEngineer', () => {
   // ============================================================================
 
   describe('EMA Features (15 features)', () => {
-    test('should extract all EMA features from all timeframes', async () => {
+    test('should extract all EMA features from all timeframes (post-Phase4 fixes)', async () => {
       const multiTimeframeData = createMockMultiTimeframeData();
       const result = await featureEngineer.engineerFeatures('BTCUSDT', createMockPattern(), multiTimeframeData);
 
       const { emaFeatures } = result.categories;
 
-      // Low Frame (4 EMAs)
-      expect(emaFeatures).toHaveProperty('ema8_lf');
-      expect(emaFeatures).toHaveProperty('ema21_lf');
-      expect(emaFeatures).toHaveProperty('ema50_lf');
-      expect(emaFeatures).toHaveProperty('ema200_lf');
+      // Phase 4 Fix #2: Converted from absolute EMA values to percentage distances
+      // This prevents symbol-specific overfitting (BTC ~50k, Forex ~1.2, Stocks ~100)
 
-      // Mid Frame (4 EMAs)
-      expect(emaFeatures).toHaveProperty('ema8_mf');
-      expect(emaFeatures).toHaveProperty('ema21_mf');
-      expect(emaFeatures).toHaveProperty('ema50_mf');
-      expect(emaFeatures).toHaveProperty('ema200_mf');
+      // Low Frame EMA distances (% from close)
+      expect(emaFeatures).toHaveProperty('ema8_lf_distance');
+      expect(emaFeatures).toHaveProperty('ema21_lf_distance');
+      expect(emaFeatures).toHaveProperty('ema50_lf_distance');
+      expect(emaFeatures).toHaveProperty('ema200_lf_distance');
 
-      // High Frame (5 EMAs + 2 ATR)
-      expect(emaFeatures).toHaveProperty('ema5_hf');
-      expect(emaFeatures).toHaveProperty('ema8_hf');
-      expect(emaFeatures).toHaveProperty('ema21_hf');
-      expect(emaFeatures).toHaveProperty('ema50_hf');
-      expect(emaFeatures).toHaveProperty('ema200_hf');
+      // Mid Frame EMA distances (% from close)
+      expect(emaFeatures).toHaveProperty('ema8_mf_distance');
+      expect(emaFeatures).toHaveProperty('ema21_mf_distance');
+      expect(emaFeatures).toHaveProperty('ema50_mf_distance');
+      expect(emaFeatures).toHaveProperty('ema200_mf_distance');
 
-      // ATR features
+      // High Frame EMA distances (% from close)
+      expect(emaFeatures).toHaveProperty('ema5_hf_distance');
+      expect(emaFeatures).toHaveProperty('ema8_hf_distance');
+      expect(emaFeatures).toHaveProperty('ema21_hf_distance');
+      expect(emaFeatures).toHaveProperty('ema50_hf_distance');
+      expect(emaFeatures).toHaveProperty('ema200_hf_distance');
+
+      // ATR features (already scale-free)
       expect(emaFeatures).toHaveProperty('atr_lf');
       expect(emaFeatures).toHaveProperty('atr_hf');
     });
 
-    test('should use indicator values from candle data', async () => {
+    test('should use indicator values from candle data (percentage distances)', async () => {
       const multiTimeframeData = createMockMultiTimeframeData();
       const result = await featureEngineer.engineerFeatures('BTCUSDT', createMockPattern(), multiTimeframeData);
 
       const { emaFeatures } = result.categories;
 
-      expect(emaFeatures.ema8_lf).toBe(40200);
-      expect(emaFeatures.ema21_lf).toBe(40100);
+      // Phase 4 Fix #2: Now using percentage distances instead of absolute values
+      // LF candle close = 40500, EMA8_LF = 40200, so distance = (40500 - 40200) / 40500 * 100 = 0.74%
+      expect(typeof emaFeatures.ema8_lf_distance).toBe('number');
+      expect(typeof emaFeatures.ema21_lf_distance).toBe('number');
       expect(emaFeatures.atr_lf).toBe(500);
     });
 
     test('should handle missing indicators gracefully (default to 0)', async () => {
-      const multiTimeframeData = createMockMultiTimeframeData({
-        lf: {
-          candles: [createMockCandle({ indicators: {} })],
-        },
-      });
+      const candle = createMockCandle({ indicators: {} });
 
       const features = featureEngineer._extractEMAFeatures(
-        multiTimeframeData.lf.candles[0],
-        createMockCandle(),
-        createMockCandle()
+        candle,
+        candle,
+        candle
       );
 
-      expect(features.ema8_lf).toBe(0);
+      // Phase 4 Fix #2: Now checking distance features instead of raw EMA values
+      expect(features.ema8_lf_distance).toBe(0);
       expect(features.atr_lf).toBe(0);
     });
   });
@@ -358,27 +369,27 @@ describe('FeatureEngineer', () => {
   // ============================================================================
 
   describe('Consolidation Pattern Features (12 features)', () => {
-    test('should extract all consolidation features', async () => {
+    test('should extract all consolidation features (post-Phase4 fixes)', async () => {
       const multiTimeframeData = createMockMultiTimeframeData();
       const pattern = createMockPattern();
       const result = await featureEngineer.engineerFeatures('BTCUSDT', pattern, multiTimeframeData);
 
       const { consolidationFeatures } = result.categories;
 
-      expect(consolidationFeatures).toHaveProperty('consolidation_level');
-      expect(consolidationFeatures).toHaveProperty('consolidation_range');
-      expect(consolidationFeatures).toHaveProperty('price_distance_from_base');
+      // Phase 4 Fix #2: Converted to percentage-based metrics
+      expect(consolidationFeatures).toHaveProperty('consolidation_range_percent');
+      expect(consolidationFeatures).toHaveProperty('price_distance_from_base_percent');
       expect(consolidationFeatures).toHaveProperty('touches_to_level');
       expect(consolidationFeatures).toHaveProperty('touch_density');
       expect(consolidationFeatures).toHaveProperty('range_ratio');
       expect(consolidationFeatures).toHaveProperty('volatility_squeeze');
-      expect(consolidationFeatures).toHaveProperty('avg_range_last_10');
+      expect(consolidationFeatures).toHaveProperty('avg_range_last_10_percent');
       expect(consolidationFeatures).toHaveProperty('has_test_bar');
       expect(consolidationFeatures).toHaveProperty('test_bar_strength');
       expect(consolidationFeatures).toHaveProperty('test_bar_volume_ratio');
     });
 
-    test('should use consolidation level from pattern', async () => {
+    test('should use consolidation level from pattern (percentage-based)', async () => {
       const multiTimeframeData = createMockMultiTimeframeData();
       const pattern = createMockPattern({
         consolidation: { basePrice: 39800, range: 400 },
@@ -386,8 +397,9 @@ describe('FeatureEngineer', () => {
 
       const result = await featureEngineer.engineerFeatures('BTCUSDT', pattern, multiTimeframeData);
 
-      expect(result.categories.consolidationFeatures.consolidation_level).toBe(39800);
-      expect(result.categories.consolidationFeatures.consolidation_range).toBe(400);
+      // Phase 4 Fix #2: Now using percentage values
+      expect(typeof result.categories.consolidationFeatures.consolidation_range_percent).toBe('number');
+      expect(typeof result.categories.consolidationFeatures.price_distance_from_base_percent).toBe('number');
     });
 
     test('should detect test bar presence', async () => {
@@ -591,7 +603,8 @@ describe('FeatureEngineer', () => {
 
       const result = await featureEngineer.engineerFeatures('BTCUSDT', pattern, multiTimeframeData);
 
-      expect(result.count).toBe(62);
+      // 60 features after Phase 4 critical fixes (was 62)
+      expect(result.count).toBe(60);
       expect(result.raw).toBeDefined();
       expect(result.normalized).toBeDefined();
       expect(result.categories).toBeDefined();
@@ -618,7 +631,8 @@ describe('FeatureEngineer', () => {
 
       for (const symbol of symbols) {
         const result = await featureEngineer.engineerFeatures(symbol, pattern, multiTimeframeData);
-        expect(result.count).toBe(62);
+        // 60 features after Phase 4 critical fixes (was 62)
+        expect(result.count).toBe(60);
         expect(result.raw).toBeDefined();
       }
     });
