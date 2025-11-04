@@ -1,0 +1,112 @@
+{
+  "validationDate": "2025-11-04T18:00:43.683Z",
+  "inputFile": "data/raw/historical-patterns.json",
+  "summary": {
+    "totalPatterns": 250,
+    "winners": 143,
+    "losers": 107,
+    "unlabeled": 0,
+    "winRate": 57.2,
+    "ratio": 1.34
+  },
+  "phase5Readiness": {
+    "passed": true,
+    "criteria": [
+      {
+        "name": "Pattern Count ≥ 200",
+        "pass": true
+      },
+      {
+        "name": "Win Rate 40-70%",
+        "pass": true
+      },
+      {
+        "name": "Ratio 0.8-1.5",
+        "pass": true
+      },
+      {
+        "name": "No Duplicates",
+        "pass": true
+      },
+      {
+        "name": "All Fields Present",
+        "pass": true
+      },
+      {
+        "name": "Valid Prices",
+        "pass": true
+      }
+    ]
+  },
+  "validation": {
+    "passed": 12,
+    "failed": 0,
+    "warnings": 0,
+    "details": {
+      "passed": [
+        {
+          "name": "Metadata Structure",
+          "status": "PASS",
+          "details": "All required fields present"
+        },
+        {
+          "name": "Collection Period",
+          "status": "PASS",
+          "details": "180 days"
+        },
+        {
+          "name": "Timeframes",
+          "status": "PASS",
+          "details": "LF=5m, MF=15m, HF=1h"
+        },
+        {
+          "name": "Pattern Count",
+          "status": "PASS",
+          "details": "250 patterns (need 200+)"
+        },
+        {
+          "name": "Win Rate",
+          "status": "PASS",
+          "details": "57.20%"
+        },
+        {
+          "name": "Winner/Loser Ratio",
+          "status": "PASS",
+          "details": "1.34"
+        },
+        {
+          "name": "Labeling Completeness",
+          "status": "PASS",
+          "details": "All patterns labeled"
+        },
+        {
+          "name": "Required Fields",
+          "status": "PASS",
+          "details": "All patterns have required fields"
+        },
+        {
+          "name": "Duplicate Check",
+          "status": "PASS",
+          "details": "No duplicate entry times"
+        },
+        {
+          "name": "Price Validity",
+          "status": "PASS",
+          "details": "All prices valid"
+        },
+        {
+          "name": "Direction Validity",
+          "status": "PASS",
+          "details": "All directions valid (long/short)"
+        },
+        {
+          "name": "Risk/Reward Validity",
+          "status": "PASS",
+          "details": "Average R:R = 2.76"
+        }
+      ],
+      "failed": [],
+      "warnings": []
+    }
+  }
+}

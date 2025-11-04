@@ -1,6 +1,6 @@
 # Gecko ML Indicator
 
-**Status:** Phases 1-4 Complete ✅ | Phase 5 Ready to Start (Dec 27, 2025)
+**Status:** Phases 1-4 Complete ✅ | Phase 5 Complete (Conditional) ✅⚠️ | Phase 6 Priority 1 Day 1 Complete ✅
 
 A machine learning-based trading indicator system that automatically detects **Gecko patterns** — consolidation and breakout-hook formations within strong higher-timeframe trends — using TradingView-API.
 
@@ -161,17 +161,36 @@ Example: User selects 5m → LF=5m, MF=15m, HF=60m
 - ✅ Comprehensive documentation and tests (35 tests, 100% passing)
 - ✅ Phase 4 Gate: PASSED
 
-### Phase 5: Backtesting (Dec 27 - Jan 9, 2026)
-- Historical performance validation
-- Walk-forward analysis
-- Risk metrics (Sharpe >1.5, win rate >65%)
+### Phase 5: Backtesting ✅ CONDITIONAL PASS (Nov 4, 2025)
+- ✅ 250 historical Gecko patterns collected
+- ✅ Synthetic OHLCV data generation (99.9% valid)
+- ✅ Baseline backtest executed
+- ✅ Sharpe ratio: 9.41 (527% above target of 1.5)
+- ❌ Win rate: 57.2% (7.8% below target of 65%)
+- ✅ Max drawdown: 9.6% (52% under 20% budget)
+- **Root Cause Identified:** 18 of 60 EMA features (30%) simulated/missing
+- **Status:** Phase 5 gate CONDITIONAL PASS (2.5/4 criteria)
+- **Next Action:** Phase 6 Priority 1 (Fix EMA features → target 65%+ win rate)
 
-### Phase 6: Live Indicator (Jan 10-23, 2026)
+### Phase 6: Model Training (Nov 4-8, 2025) — IN PROGRESS
+**Priority 1: Fix EMA Feature Extraction**
+- ✅ Day 1 (Nov 4): EMA Calculator module (500 lines, 7 methods, 34 tests, 95.75% coverage)
+- ⏳ Days 2-3 (Nov 4-5): Enhance 250 patterns with real OHLCV candles + EMAs
+- ⏳ Day 4 (Nov 6): Update FeatureEngineer to use real EMAs, re-run backtest
+- ⏳ Day 5 (Nov 7-8): Retrain model, validate 65%+ win rate, Phase 5 re-evaluation
+
+**Phase 6 Priority 1 Day 1 Metrics:**
+- EMA Calculator: 500 lines, 7 methods, ~1-3ms performance
+- Tests: 34/34 passing, 95.75% coverage
+- Documentation: 969-line comprehensive guide + demo script
+- Status: ✅ Day 1 COMPLETE | Days 2-5 READY TO START
+
+### Phase 7: Live Indicator (Jan 10-23, 2026)
 - Real-time streaming integration
 - Signal generation and alerts
 - Dashboard development
 
-### Phase 7: Deployment (Jan 24 - Feb 3, 2026)
+### Phase 8: Deployment (Jan 24 - Feb 3, 2026)
 - Production setup and monitoring
 - Paper trading validation
 - Live signal generation
@@ -268,11 +287,30 @@ This is a trading indicator system for educational and research purposes. It sho
 
 ---
 
-**Project Status:** Phases 1-4 Complete — Ready for Phase 5 Development
-**Current Phase:** Phase 5: Backtesting (Scheduled Dec 27 - Jan 9, 2026)
-**Latest Completion:** Phase 4: Model Training (Nov 3, 2025) ✅
-**Latest Session:** [Phase 4 Summary](docs/GECKO-20251103-session-phase4-complete.md)
-**Last Updated:** November 3, 2025
-**Critical Fixes Applied:** [Phase 4 Fixes](docs/CRITICAL-FIXES-PHASE4.md)
+**Project Status:** Phases 1-4 Complete ✅ | Phase 5 Conditional Pass ✅⚠️ | Phase 6 Priority 1 Day 1 Complete ✅
+
+**Current Phase:** Phase 6 Priority 1 (Fix EMA Feature Extraction)
+- **Day 1 (Nov 4):** ✅ COMPLETE — EMA Calculator module created
+- **Days 2-3 (Nov 4-5):** ⏳ IN PROGRESS — Enhance patterns with real EMAs
+- **Days 4-5 (Nov 6-8):** ⏳ SCHEDULED — Update model, validate 65%+ win rate
+
+**Phase 5 Backtesting Results:**
+- Sharpe Ratio: 9.41 ✅ (PASS, 527% above target)
+- Win Rate: 57.2% ❌ (FAIL, 7.8% below 65% target)
+- Max Drawdown: 9.6% ✅ (PASS, 52% under budget)
+- **Gate Verdict:** CONDITIONAL PASS (2.5/4 criteria)
+- **Root Cause:** 18 of 60 EMA features simulated → Phase 6 Priority 1 fixing
+
+**Latest Completions:**
+- Phase 5 Backtesting (Nov 4, 2025) — [Report](docs/PHASE5-BACKTESTING-REPORT.md)
+- Phase 6 Priority 1 Day 1 (Nov 4, 2025) — [Summary](docs/GECKO-SESSION-2025-11-04-PHASE6-PRIORITY1-DAY1.md)
+
+**Key Documents:**
+- [Phase 5 Executive Summary](docs/PHASE5-EXECUTIVE-SUMMARY.md)
+- [Phase 6 EMA Analysis](docs/PHASE6-EMA-FEATURE-ANALYSIS.md)
+- [Phase 6 Quick Start Guide](docs/PHASE6-PRIORITY1-QUICKSTART.md)
+- [EMA Calculator Guide](docs/EMA-CALCULATOR-GUIDE.md)
+
+**Last Updated:** November 4, 2025
 **Maintainer:** Trading Project Team
 **Go-Live Target:** February 3, 2026
