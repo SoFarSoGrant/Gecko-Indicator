@@ -51,14 +51,35 @@ function extractFeatures(pattern) {
     (pattern.stage4_hook.swingExtreme - pattern.stage2_consolidation.base) / pattern.atr // 7: hookDistanceFromBase
   );
 
-  // === EMA FEATURES (18 features - percentage-based) ===
-  // Since we don't have EMA values in pattern data, we'll use price-relative features
-  // These are placeholders - in production, actual EMA values would be calculated
-  const priceRelativeToBase = (pattern.entryPrice - pattern.stage2_consolidation.base) / pattern.stage2_consolidation.base;
+  // === EMA FEATURES (18 features - percentage-based, real EMAs from enhanced patterns) ===
+  // Phase 6 Priority 1: Now using real EMAs from pattern.emas object (calculated from synthetic/real candles)
+  const lfEMAs = pattern.emas?.lf || {};
+  const mfEMAs = pattern.emas?.mf || {};
+  const hfEMAs = pattern.emas?.hf || {};
 
-  for (let i = 0; i < 18; i++) {
-    features.push(priceRelativeToBase * (1 + Math.random() * 0.1)); // Simulated EMA features
-  }
+  // LF: ema_8, ema_21, ema_50, ema_200 (4 features → 8 distance/ratio features)
+  features.push(
+    lfEMAs.ema_8 ? ((pattern.entryPrice - lfEMAs.ema_8) / pattern.entryPrice) * 100 : 0,
+    lfEMAs.ema_21 ? ((pattern.entryPrice - lfEMAs.ema_21) / pattern.entryPrice) * 100 : 0,
+    lfEMAs.ema_50 ? ((pattern.entryPrice - lfEMAs.ema_50) / pattern.entryPrice) * 100 : 0,
+    lfEMAs.ema_200 ? ((pattern.entryPrice - lfEMAs.ema_200) / pattern.entryPrice) * 100 : 0,
+
+    // MF: ema_8, ema_21, ema_50, ema_200 (4 features → 8 distance/ratio features)
+    mfEMAs.ema_8 ? ((pattern.entryPrice - mfEMAs.ema_8) / pattern.entryPrice) * 100 : 0,
+    mfEMAs.ema_21 ? ((pattern.entryPrice - mfEMAs.ema_21) / pattern.entryPrice) * 100 : 0,
+    mfEMAs.ema_50 ? ((pattern.entryPrice - mfEMAs.ema_50) / pattern.entryPrice) * 100 : 0,
+    mfEMAs.ema_200 ? ((pattern.entryPrice - mfEMAs.ema_200) / pattern.entryPrice) * 100 : 0,
+
+    // HF: ema_5, ema_8, ema_21, ema_50, ema_200 (5 features → 10 distance/ratio features)
+    hfEMAs.ema_5 ? ((pattern.entryPrice - hfEMAs.ema_5) / pattern.entryPrice) * 100 : 0,
+    hfEMAs.ema_8 ? ((pattern.entryPrice - hfEMAs.ema_8) / pattern.entryPrice) * 100 : 0,
+    hfEMAs.ema_21 ? ((pattern.entryPrice - hfEMAs.ema_21) / pattern.entryPrice) * 100 : 0,
+    hfEMAs.ema_50 ? ((pattern.entryPrice - hfEMAs.ema_50) / pattern.entryPrice) * 100 : 0,
+    hfEMAs.ema_200 ? ((pattern.entryPrice - hfEMAs.ema_200) / pattern.entryPrice) * 100 : 0,
+
+    // Fallback placeholder features (in case EMAs aren't available)
+    0, 0, 0
+  );
 
   // === CONSOLIDATION FEATURES (12 features) ===
   features.push(

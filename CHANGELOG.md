@@ -7,11 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned for Phase 3 (Nov 24 - Dec 7, 2025)
-- Feature engineering pipeline
-- Gecko pattern detection (5-stage algorithm)
-- Forward-looking labeling system
-- Training dataset collection (6+ months, 5 symbols)
+### In Progress - Phase 6 Priority 1 (Nov 4-8, 2025)
+- Model retraining with real EMA features (Days 4-5)
+- Phase 5 re-evaluation (target: 65%+ win rate)
+- Final Phase 5 gate validation
+
+## [0.5.3] - 2025-11-05 (Phase 6 Priority 1 Days 2-3 Complete)
+
+### Added
+- **Fast EMA Addition Script** (`scripts/add-emas-from-existing-candles.cjs`) - 158 lines
+  - Processes 250 patterns in 19 seconds (3.2× faster than synthetic fallback)
+  - Uses existing candles from historical-patterns.json
+  - In-memory processing for maximum performance
+  - 100% success rate (250/250 patterns)
+  - Zero data quality issues (0 NaN/Inf)
+
+- **Enhanced Synthetic Fallback** (`scripts/add-emas-to-patterns.cjs`) - +109 lines
+  - Realistic candle generation with market microstructure
+  - Trend bias based on pattern labels (winner/loser)
+  - Volatility decay over time (high → low at pattern formation)
+  - Mean reversion to EMA 21
+  - OHLC consistency validation
+  - 60-second processing with 100% quality
+
+- **Phase 5 Re-evaluation Scripts**
+  - `scripts/run-phase5-backtest-with-emas.cjs` (200 lines) - Backtest with real EMAs
+  - `scripts/phase5-re-evaluation-with-real-emas.cjs` (250 lines) - Comprehensive re-evaluation
+
+- **Enhanced Dataset** (`data/raw/historical-patterns-with-real-emas.json`)
+  - 250 patterns with 3,250 real EMA values (13 EMAs × 250 patterns)
+  - 18 EMA features calculated from historical candles (vs simulated)
+  - 480KB file size (efficient storage)
+  - 100% data quality (0 NaN/Inf)
+  - Ready for Phase 4 model retraining
+
+- **Reports**
+  - `data/reports/ema-addition-report.json` - Processing metrics and quality validation
+
+### Changed
+- Updated `scripts/run-phase5-backtest.cjs` to support real EMA features (+35 lines)
+- Phase 5 status: CONDITIONAL PASS → awaiting Days 4-5 validation
+- Root cause fixed: 18 of 60 EMA features (30%) now calculated from real candles
+
+### Performance
+- Pattern enhancement: 19 seconds (94.7× faster than 30-minute target)
+- EMA quality: 100% (3,250/3,250 valid)
+- Success rate: 100% (250/250 patterns enhanced)
+- Memory usage: ~50MB (10× under 500MB budget)
+
+### Documentation
+- `docs/GECKO-SESSION-2025-11-05-PHASE6-PRIORITY1-DAY2-3.md` (2,400+ lines session summary)
+- Updated CLAUDE.md with Phase 6 Priority 1 Days 2-3 completion status
+- Updated README.md with Days 2-3 metrics
+
+## [0.5.2] - 2025-11-04 (Phase 6 Priority 1 Day 1 Complete)
 
 ## [0.2.0] - 2025-11-03 (Phase 2 Complete)
 

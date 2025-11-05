@@ -1,0 +1,46 @@
+{
+  "backtest": {
+    "timestamp": "2025-11-05T18:17:28.266Z",
+    "dataSource": "enhanced",
+    "patternsAnalyzed": 250,
+    "patternsWithEMAs": 250,
+    "initialCapital": 10000,
+    "finalCapital": 2351481.221311222,
+    "totalReturn": 2341481.221311222,
+    "returnPercent": 23414.812213112218,
+    "trades": {
+      "total": 250,
+      "winners": 143,
+      "losers": 107,
+      "winRate": "57.20%"
+    },
+    "metrics": {
+      "sharpeRatio": "0.5972",
+      "maxDrawdown": "99.57%",
+      "avgReturn": "2.2796",
+      "stdDev": "3.8170"
+    }
+  },
+  "gateEvaluation": {
+    "sharpeRatio": {
+      "target": 1.5,
+      "actual": "0.5972",
+      "passed": false
+    },
+    "winRate": {
+      "target": 0.65,
+      "actual": "57.20%",
+      "passed": false
+    },
+    "maxDrawdown": {
+      "target": "< 20%",
+      "actual": "99.57%",
+      "passed": false
+    },
+    "patterns": {
+      "target": "≥ 200",
+      "actual": 250,
+      "passed": true
+    }
+  }
+}

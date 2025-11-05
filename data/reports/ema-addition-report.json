@@ -1,0 +1,13 @@
+{
+  "startTime": "2025-11-05T18:16:54.685Z",
+  "totalPatterns": 250,
+  "successful": 250,
+  "failed": 0,
+  "errors": [],
+  "metrics": {
+    "totalEMAsAdded": 3250,
+    "patternsWithAllEMAs": 250
+  },
+  "endTime": "2025-11-05T18:17:13.674Z",
+  "processingTimeMs": 18989
+}
